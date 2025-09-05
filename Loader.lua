@@ -1,481 +1,348 @@
--- Script VIP com Menu Delta Style
--- Substitua GAMEPASS_ID pelo ID da sua gamepass
-local GAMEPASS_ID = 1446832551 -- ID da sua gamepass
+--[[
+    Script GUI Multifuncional - Mobile + Proteção por Gamepass
+    Recursos: ESP, Boost, Float, Compras, Tabs, Drag, etc.
+    Mobile friendly. Proteção: só funciona para quem tem a Gamepass correta.
+    By Banguelhinha
+]]
+
+
+local GAMEPASS_ID = 1446832551 -- 
 
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local CoreGui = game:GetService("CoreGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
 
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-
--- Variáveis de controle
+-- Checagem de gamepass (proteção)
 local hasGamepass = false
-local isFloating = false
-local floatHeight = 50
-local floatConnection = nil
-local speedBoost = 16
-local jumpBoost = 50
-local originalSpeed = 16
-local originalJump = 50
-local savedPosition = nil
-local gui = nil
+pcall(function()
+    hasGamepass = MarketplaceService:UserOwnsGamePassAsync(LocalPlayer.UserId, GAMEPASS_ID)
+end)
 
--- Verificar gamepass
-local function checkGamepass()
-    local success, owns = pcall(function()
-        return MarketplaceService:UserOwnsGamePassAsync(player.UserId, GAMEPASS_ID)
-    end)
-    
-    if success and owns then
-        hasGamepass = true
-        return true
-    else
-        return false
-    end
+if not hasGamepass then
+    -- Mensagem de bloqueio
+    local sg = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+    sg.Name = "GamepassRequired"
+    local label = Instance.new("TextLabel", sg)
+    label.Size = UDim2.new(0.8,0,0.1,0)
+    label.Position = UDim2.new(0.1,0,0.45,0)
+    label.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    label.TextColor3 = Color3.new(1,0.2,0.2)
+    label.TextScaled = true
+    label.Text = "Você precisa da Gamepass para usar este script!"
+    return
 end
 
--- Criar notificação
-local function createNotification(text, color)
-    local notification = Instance.new("ScreenGui")
-    notification.Name = "VIPNotification"
-    notification.Parent = playerGui
-    
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 300, 0, 60)
-    frame.Position = UDim2.new(1, -320, 0, 20)
-    frame.BackgroundColor3 = color or Color3.fromRGB(40, 40, 40)
+-- ==== INÍCIO DA INTERFACE E FUNÇÕES ====
+
+-- Detecta se é mobile
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+-- Cores & estilos
+local tabNames = { "main", "visual", "misc" }
+local tabColors = {
+    main = Color3.fromRGB(37, 176, 37),
+    visual = Color3.fromRGB(184, 187, 24),
+    misc = Color3.fromRGB(70, 70, 255)
+}
+local FONT = Enum.Font.Gotham
+
+-- Escalas mobile
+local buttonHeight = isMobile and 60 or 34
+local buttonWidth = isMobile and 0.9 or 0.6
+local frameWidth = isMobile and 0.97 or 0.25
+local frameHeight = isMobile and 0.93 or 0.45
+local frameY = 0.5
+
+-- GUI principal
+local screenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+screenGui.Name = "MelhorGUIMobile"
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.IgnoreGuiInset = true
+
+local function createButton(parent, props)
+    local btn = Instance.new("TextButton", parent)
+    for k, v in pairs(props) do btn[k] = v end
+    local txtConstraint = Instance.new("UITextSizeConstraint", btn)
+    txtConstraint.MaxTextSize = props.MaxTextSize or (isMobile and 32 or 22)
+    return btn
+end
+
+local function createFrame(parent, props)
+    local fr = Instance.new("Frame", parent)
+    for k, v in pairs(props) do fr[k] = v end
+    return fr
+end
+
+-- Tabs
+local mainFrame = createFrame(screenGui, {
+    Name = "MainFrame",
+    BackgroundColor3 = Color3.fromRGB(28, 30, 39),
+    Size = UDim2.new(frameWidth, 0, frameHeight, 0),
+    Position = UDim2.new(0.5, 0, frameY, 0),
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    BorderSizePixel = 0,
+})
+
+-- Tab buttons
+local tabButtons = {}
+local tabFrames = {}
+for i, name in ipairs(tabNames) do
+    tabButtons[name] = createButton(mainFrame, {
+        Name = name.."Btn",
+        Text = name:upper(),
+        BackgroundColor3 = tabColors[name],
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.new((i-1)*(buttonWidth/2)+(buttonWidth/4), 0, 0.025, 0),
+        Size = UDim2.new(buttonWidth/3, 0, 0.09, 0),
+        TextScaled = true,
+        TextColor3 = Color3.new(1,1,1),
+        Font = FONT,
+        BorderSizePixel = 0,
+        AutoButtonColor = true,
+    })
+end
+
+-- Conteúdo das tabs
+for _, name in ipairs(tabNames) do
+    local frame = Instance.new("ScrollingFrame", mainFrame)
+    frame.Name = name.."Tab"
+    frame.BackgroundTransparency = 1
+    frame.Size = UDim2.new(1, 0, 0.83, 0)
+    frame.Position = UDim2.new(0, 0, 0.13, 0)
+    frame.Visible = (name == "main")
     frame.BorderSizePixel = 0
-    frame.Parent = notification
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = frame
-    
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(1, -20, 1, 0)
-    textLabel.Position = UDim2.new(0, 10, 0, 0)
-    textLabel.BackgroundTransparency = 1
-    textLabel.Text = text
-    textLabel.TextColor3 = Color3.new(1, 1, 1)
-    textLabel.TextScaled = true
-    textLabel.Font = Enum.Font.GothamBold
-    textLabel.Parent = frame
-    
-    -- Animação
-    frame:TweenPosition(UDim2.new(1, -320, 0, 20), "Out", "Quad", 0.5, true)
-    wait(3)
-    frame:TweenPosition(UDim2.new(1, 0, 0, 20), "In", "Quad", 0.5, true)
-    wait(0.5)
-    notification:Destroy()
+    frame.CanvasSize = UDim2.new(0, 0, 2, 0)
+    frame.ScrollBarThickness = isMobile and 18 or 8
+
+    local layout = Instance.new("UIListLayout", frame)
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, isMobile and 12 or 4)
+    tabFrames[name] = frame
 end
 
--- Criar GUI principal
-local function createGUI()
-    gui = Instance.new("ScreenGui")
-    gui.Name = "VIPScript"
-    gui.Parent = playerGui
-    gui.ResetOnSpawn = false
-    
-    -- Frame principal
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 400, 0, 500)
-    mainFrame.Position = UDim2.new(0.5, -200, 0.5, -250)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Parent = gui
-    mainFrame.Active = true
-    mainFrame.Draggable = true
-    
-    -- Corner radius
-    local mainCorner = Instance.new("UICorner")
-    mainCorner.CornerRadius = UDim.new(0, 12)
-    mainCorner.Parent = mainFrame
-    
-    -- Barra superior
-    local topBar = Instance.new("Frame")
-    topBar.Size = UDim2.new(1, 0, 0, 40)
-    topBar.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
-    topBar.BorderSizePixel = 0
-    topBar.Parent = mainFrame
-    
-    local topCorner = Instance.new("UICorner")
-    topCorner.CornerRadius = UDim.new(0, 12)
-    topCorner.Parent = topBar
-    
-    -- Título
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -80, 1, 0)
-    title.Position = UDim2.new(0, 15, 0, 0)
-    title.BackgroundTransparency = 1
-    title.Text = "VIP SCRIPT v1.0"
-    title.TextColor3 = Color3.fromRGB(120, 180, 255)
-    title.TextSize = 16
-    title.Font = Enum.Font.GothamBold
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = topBar
-    
-    -- Botão fechar
-    local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 30, 0, 30)
-    closeBtn.Position = UDim2.new(1, -35, 0, 5)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
-    closeBtn.Text = "×"
-    closeBtn.TextColor3 = Color3.new(1, 1, 1)
-    closeBtn.TextSize = 18
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.BorderSizePixel = 0
-    closeBtn.Parent = topBar
-    
-    local closeCorner = Instance.new("UICorner")
-    closeCorner.CornerRadius = UDim.new(0, 6)
-    closeCorner.Parent = closeBtn
-    
-    closeBtn.MouseButton1Click:Connect(function()
-        gui:Destroy()
-    end)
-    
-    -- Container de conteúdo
-    local contentFrame = Instance.new("Frame")
-    contentFrame.Size = UDim2.new(1, -20, 1, -60)
-    contentFrame.Position = UDim2.new(0, 10, 0, 50)
-    contentFrame.BackgroundTransparency = 1
-    contentFrame.Parent = mainFrame
-    
-    -- Função para criar botão
-    local function createButton(text, position, callback, color)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, -20, 0, 35)
-        btn.Position = position
-        btn.BackgroundColor3 = color or Color3.fromRGB(45, 45, 60)
-        btn.Text = text
-        btn.TextColor3 = Color3.new(1, 1, 1)
-        btn.TextSize = 14
-        btn.Font = Enum.Font.Gotham
-        btn.BorderSizePixel = 0
-        btn.Parent = contentFrame
-        
-        local btnCorner = Instance.new("UICorner")
-        btnCorner.CornerRadius = UDim.new(0, 6)
-        btnCorner.Parent = btn
-        
-        -- Efeito hover
-        btn.MouseEnter:Connect(function()
-            btn:TweenSize(UDim2.new(1, -15, 0, 35), "Out", "Quad", 0.2, true)
-        end)
-        
-        btn.MouseLeave:Connect(function()
-            btn:TweenSize(UDim2.new(1, -20, 0, 35), "Out", "Quad", 0.2, true)
-        end)
-        
-        btn.MouseButton1Click:Connect(callback)
-        return btn
+-- Troca de tab
+local function switchTab(tab)
+    for _, name in ipairs(tabNames) do
+        tabFrames[name].Visible = (name == tab)
     end
-    
-    -- Função para criar slider
-    local function createSlider(text, min, max, default, position, callback)
-        local sliderFrame = Instance.new("Frame")
-        sliderFrame.Size = UDim2.new(1, -20, 0, 60)
-        sliderFrame.Position = position
-        sliderFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
-        sliderFrame.BorderSizePixel = 0
-        sliderFrame.Parent = contentFrame
-        
-        local sliderCorner = Instance.new("UICorner")
-        sliderCorner.CornerRadius = UDim.new(0, 8)
-        sliderCorner.Parent = sliderFrame
-        
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, -10, 0, 25)
-        label.Position = UDim2.new(0, 5, 0, 5)
-        label.BackgroundTransparency = 1
-        label.Text = text .. ": " .. default
-        label.TextColor3 = Color3.new(1, 1, 1)
-        label.TextSize = 12
-        label.Font = Enum.Font.Gotham
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Parent = sliderFrame
-        
-        local sliderBg = Instance.new("Frame")
-        sliderBg.Size = UDim2.new(1, -20, 0, 20)
-        sliderBg.Position = UDim2.new(0, 10, 0, 30)
-        sliderBg.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-        sliderBg.BorderSizePixel = 0
-        sliderBg.Parent = sliderFrame
-        
-        local bgCorner = Instance.new("UICorner")
-        bgCorner.CornerRadius = UDim.new(0, 10)
-        bgCorner.Parent = sliderBg
-        
-        local sliderBtn = Instance.new("TextButton")
-        sliderBtn.Size = UDim2.new(0, 20, 1, 0)
-        sliderBtn.Position = UDim2.new((default - min) / (max - min), -10, 0, 0)
-        sliderBtn.BackgroundColor3 = Color3.fromRGB(120, 180, 255)
-        sliderBtn.Text = ""
-        sliderBtn.BorderSizePixel = 0
-        sliderBtn.Parent = sliderBg
-        
-        local btnCorner = Instance.new("UICorner")
-        btnCorner.CornerRadius = UDim.new(0, 10)
-        btnCorner.Parent = sliderBtn
-        
-        local dragging = false
-        
-        sliderBtn.MouseButton1Down:Connect(function()
-            dragging = true
-        end)
-        
-        UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+end
+for _, name in ipairs(tabNames) do
+    tabButtons[name].MouseButton1Click:Connect(function()
+        switchTab(name)
+    end)
+end
+
+----------------------
+-- MAIN TAB BUTTONS --
+----------------------
+
+local function addMainTabButton(name, text, callback)
+    return createButton(tabFrames.main, {
+        Name = name,
+        Text = text,
+        BackgroundColor3 = Color3.fromRGB(174, 42, 42),
+        Size = UDim2.new(0.93, 0, 0, buttonHeight),
+        TextScaled = true,
+        TextColor3 = Color3.new(1,1,1),
+        Font = FONT,
+        BorderSizePixel = 0,
+        AutoButtonColor = true,
+        [isMobile and "TextWrapped" or ""] = true,
+    }).MouseButton1Click:Connect(callback)
+end
+
+-- FLOAT
+addMainTabButton("FloatBtn", "FLOAT", function()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame + Vector3.new(0, 50, 0)
+    end
+end)
+
+-- INFINITY JUMP
+local infJumpEnabled = false
+local infJumpBtn = createButton(tabFrames.main, {
+    Name = "InfJumpBtn",
+    Text = "INFINITY JUMP",
+    BackgroundColor3 = Color3.fromRGB(174, 42, 42),
+    Size = UDim2.new(0.93, 0, 0, buttonHeight),
+    TextScaled = true,
+    TextColor3 = Color3.new(1,1,1),
+    Font = FONT,
+    BorderSizePixel = 0,
+    AutoButtonColor = true,
+})
+infJumpBtn.MouseButton1Click:Connect(function()
+    infJumpEnabled = not infJumpEnabled
+    infJumpBtn.BackgroundColor3 = infJumpEnabled and Color3.fromRGB(64,149,33) or Color3.fromRGB(174,42,42)
+end)
+UserInputService.JumpRequest:Connect(function()
+    if infJumpEnabled then
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("Humanoid") then char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+-- JUMP BOOST
+local jumpBoostEnabled = false
+local jumpBoostBtn = createButton(tabFrames.main, {
+    Name = "JumpBoostBtn",
+    Text = "JUMP BOOST",
+    BackgroundColor3 = Color3.fromRGB(174, 42, 42),
+    Size = UDim2.new(0.93, 0, 0, buttonHeight),
+    TextScaled = true,
+    TextColor3 = Color3.new(1,1,1),
+    Font = FONT,
+    BorderSizePixel = 0,
+    AutoButtonColor = true,
+})
+jumpBoostBtn.MouseButton1Click:Connect(function()
+    jumpBoostEnabled = not jumpBoostEnabled
+    jumpBoostBtn.BackgroundColor3 = jumpBoostEnabled and Color3.fromRGB(64,149,33) or Color3.fromRGB(174,42,42)
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.JumpPower = jumpBoostEnabled and 120 or 50
+    end
+end)
+
+-- SPEED BOOST
+local speedBoostEnabled = false
+local speedBoostBtn = createButton(tabFrames.main, {
+    Name = "SpeedBoostBtn",
+    Text = "SPEED BOOST",
+    BackgroundColor3 = Color3.fromRGB(174, 42, 42),
+    Size = UDim2.new(0.93, 0, 0, buttonHeight),
+    TextScaled = true,
+    TextColor3 = Color3.new(1,1,1),
+    Font = FONT,
+    BorderSizePixel = 0,
+    AutoButtonColor = true,
+})
+speedBoostBtn.MouseButton1Click:Connect(function()
+    speedBoostEnabled = not speedBoostEnabled
+    speedBoostBtn.BackgroundColor3 = speedBoostEnabled and Color3.fromRGB(64,149,33) or Color3.fromRGB(174,42,42)
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.WalkSpeed = speedBoostEnabled and 50 or 16
+    end
+end)
+
+-- STEAL
+local stealUp = true
+local stealBtn = createButton(tabFrames.main, {
+    Name = "StealBtn",
+    Text = "STEAL (UP/DOWN)",
+    BackgroundColor3 = Color3.fromRGB(174, 42, 42),
+    Size = UDim2.new(0.93, 0, 0, buttonHeight),
+    TextScaled = true,
+    TextColor3 = Color3.new(1,1,1),
+    Font = FONT,
+    BorderSizePixel = 0,
+    AutoButtonColor = true,
+})
+stealBtn.MouseButton1Click:Connect(function()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        if stealUp then
+            char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame + Vector3.new(0, 200, 0)
+        else
+            char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame - Vector3.new(0, 50, 0)
+        end
+        stealUp = not stealUp
+    end
+end)
+
+----------------------
+-- VISUAL TAB BUTTONS
+----------------------
+
+local espPlayerBtn = createButton(tabFrames.visual, {
+    Name = "ESPPlayerBtn",
+    Text = "ESP PLAYER",
+    BackgroundColor3 = Color3.fromRGB(174, 42, 42),
+    Size = UDim2.new(0.93, 0, 0, buttonHeight),
+    TextScaled = true,
+    TextColor3 = Color3.new(1,1,1),
+    Font = FONT,
+    BorderSizePixel = 0,
+    AutoButtonColor = true,
+})
+local espEnabled = false
+espPlayerBtn.MouseButton1Click:Connect(function()
+    espEnabled = not espEnabled
+    espPlayerBtn.BackgroundColor3 = espEnabled and Color3.fromRGB(64,149,33) or Color3.fromRGB(174,42,42)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character then
+            if espEnabled then
+                if not p.Character:FindFirstChild("ESPHighlight") then
+                    local h = Instance.new("Highlight", p.Character)
+                    h.Name = "ESPHighlight"
+                    h.FillTransparency = 1
+                    h.OutlineColor = Color3.new(1,1,1)
+                end
+            else
+                local h = p.Character:FindFirstChild("ESPHighlight")
+                if h then h:Destroy() end
+            end
+        end
+    end
+end)
+
+--------------------
+-- MISC TAB BUTTONS
+--------------------
+
+local function addMiscTabButton(name, text, itemName)
+    local btn = createButton(tabFrames.misc, {
+        Name = name,
+        Text = text,
+        BackgroundColor3 = Color3.fromRGB(101,101,101),
+        Size = UDim2.new(0.93, 0, 0, buttonHeight),
+        TextScaled = true,
+        TextColor3 = Color3.new(1,1,1),
+        Font = FONT,
+        BorderSizePixel = 0,
+        AutoButtonColor = true,
+    })
+    btn.MouseButton1Click:Connect(function()
+        local buyFunc = ReplicatedStorage:FindFirstChild("Packages") and ReplicatedStorage.Packages.Net:FindFirstChild("RF/CoinsShopService/RequestBuy")
+        if buyFunc then
+            buyFunc:InvokeServer(itemName)
+        end
+    end)
+end
+
+addMiscTabButton("QuantumClonerBtn", "Quantum Cloner", "Quantum Cloner")
+addMiscTabButton("MedusaBtn", "Medusa's Head", "Medusa's Head")
+addMiscTabButton("InvisBtn", "Invisibility Cloak", "Invisibility Cloak")
+
+------------------------
+-- DRAG MAIN FRAME MOBILE
+------------------------
+local dragging = false
+local dragInput, dragStart, startPos
+
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
                 dragging = false
             end
         end)
-        
-        UserInputService.InputChanged:Connect(function(input)
-            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                local mouse = Players.LocalPlayer:GetMouse()
-                local percent = math.clamp((mouse.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
-                sliderBtn.Position = UDim2.new(percent, -10, 0, 0)
-                local value = math.floor(min + (max - min) * percent)
-                label.Text = text .. ": " .. value
-                callback(value)
-            end
-        end)
     end
-    
-    -- Botões principais
-    createButton("🌟 FLOAT", UDim2.new(0, 10, 0, 10), function()
-        toggleFloat()
-    end, Color3.fromRGB(70, 130, 255))
-    
-    createButton("📍 SAVE POSITION", UDim2.new(0, 10, 0, 55), function()
-        savePosition()
-    end, Color3.fromRGB(50, 200, 100))
-    
-    createButton("🚀 TELEPORT TO SAVED", UDim2.new(0, 10, 0, 100), function()
-        teleportToSaved()
-    end, Color3.fromRGB(255, 150, 50))
-    
-    -- Sliders
-    createSlider("Speed", 16, 100, speedBoost, UDim2.new(0, 10, 0, 150), function(value)
-        speedBoost = value
-        updateSpeed()
-    end)
-    
-    createSlider("Jump Power", 50, 200, jumpBoost, UDim2.new(0, 10, 0, 220), function(value)
-        jumpBoost = value
-        updateJump()
-    end)
-    
-    createSlider("Float Height", 10, 100, floatHeight, UDim2.new(0, 10, 0, 290), function(value)
-        floatHeight = value
-    end)
-    
-    -- Info
-    local infoLabel = Instance.new("TextLabel")
-    infoLabel.Size = UDim2.new(1, -20, 0, 80)
-    infoLabel.Position = UDim2.new(0, 10, 0, 360)
-    infoLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
-    infoLabel.Text = "VIP SCRIPT ATIVO\n\nFloat: Flutua na altura configurada\nSave/TP: Salva e teleporta posições\nSliders: Configure velocidade e pulo"
-    infoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    infoLabel.TextSize = 10
-    infoLabel.Font = Enum.Font.Gotham
-    infoLabel.TextYAlignment = Enum.TextYAlignment.Top
-    infoLabel.BorderSizePixel = 0
-    infoLabel.Parent = contentFrame
-    
-    local infoCorner = Instance.new("UICorner")
-    infoCorner.CornerRadius = UDim.new(0, 8)
-    infoCorner.Parent = infoLabel
-end
-
--- Funções do script
-function toggleFloat()
-    if not hasGamepass then
-        createNotification("❌ Você precisa da Gamepass VIP!", Color3.fromRGB(220, 50, 50))
-        return
-    end
-    
-    isFloating = not isFloating
-    
-    if isFloating then
-        local character = player.Character
-        if character then
-            local rootPart = character:FindFirstChild("HumanoidRootPart")
-            if rootPart then
-                local bodyVelocity = Instance.new("BodyVelocity")
-                bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
-                bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-                bodyVelocity.Parent = rootPart
-                
-                local bodyPosition = Instance.new("BodyPosition")
-                bodyPosition.MaxForce = Vector3.new(4000, 4000, 4000)
-                bodyPosition.Position = rootPart.Position + Vector3.new(0, floatHeight, 0)
-                bodyPosition.Parent = rootPart
-                
-                floatConnection = RunService.Heartbeat:Connect(function()
-                    if rootPart and bodyPosition then
-                        bodyPosition.Position = Vector3.new(rootPart.Position.X, rootPart.Position.Y, rootPart.Position.Z)
-                    end
-                end)
-                
-                createNotification("🌟 Float ativado!", Color3.fromRGB(70, 130, 255))
-            end
-        end
-    else
-        if floatConnection then
-            floatConnection:Disconnect()
-            floatConnection = nil
-        end
-        
-        local character = player.Character
-        if character then
-            local rootPart = character:FindFirstChild("HumanoidRootPart")
-            if rootPart then
-                for _, obj in pairs(rootPart:GetChildren()) do
-                    if obj:IsA("BodyVelocity") or obj:IsA("BodyPosition") then
-                        obj:Destroy()
-                    end
-                end
-            end
-        end
-        
-        createNotification("🌟 Float desativado!", Color3.fromRGB(255, 100, 100))
-    end
-end
-
-function savePosition()
-    if not hasGamepass then
-        createNotification("❌ Você precisa da Gamepass VIP!", Color3.fromRGB(220, 50, 50))
-        return
-    end
-    
-    local character = player.Character
-    if character then
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
-        if rootPart then
-            savedPosition = rootPart.Position
-            createNotification("📍 Posição salva!", Color3.fromRGB(50, 200, 100))
-        end
-    end
-end
-
-function teleportToSaved()
-    if not hasGamepass then
-        createNotification("❌ Você precisa da Gamepass VIP!", Color3.fromRGB(220, 50, 50))
-        return
-    end
-    
-    if not savedPosition then
-        createNotification("❌ Nenhuma posição salva!", Color3.fromRGB(220, 50, 50))
-        return
-    end
-    
-    local character = player.Character
-    if character then
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
-        if rootPart then
-            rootPart.CFrame = CFrame.new(savedPosition)
-            createNotification("🚀 Teleportado!", Color3.fromRGB(255, 150, 50))
-        end
-    end
-end
-
-function updateSpeed()
-    if not hasGamepass then return end
-    
-    local character = player.Character
-    if character then
-        local humanoid = character:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid.WalkSpeed = speedBoost
-        end
-    end
-end
-
-function updateJump()
-    if not hasGamepass then return end
-    
-    local character = player.Character
-    if character then
-        local humanoid = character:FindFirstChild("Humanoid")
-        if humanoid then
-            if humanoid.JumpPower then
-                humanoid.JumpPower = jumpBoost
-            elseif humanoid.JumpHeight then
-                humanoid.JumpHeight = jumpBoost
-            end
-        end
-    end
-end
-
--- Atualizar quando respawnar
-player.CharacterAdded:Connect(function(character)
-    wait(1)
-    updateSpeed()
-    updateJump()
 end)
-
--- Inicializar
-if checkGamepass() then
-    createGUI()
-    createNotification("✅ VIP Script carregado com sucesso!", Color3.fromRGB(50, 200, 100))
-    
-    -- Aplicar configurações iniciais
-    wait(2)
-    updateSpeed()
-    updateJump()
-else
-    createNotification("❌ Gamepass VIP necessária! ID: " .. GAMEPASS_ID, Color3.fromRGB(220, 50, 50))
-end
-
--- Keybind para abrir/fechar (Insert)
-UserInputService.InputBegan:Connect(function(key, gameProcessed)
-    if gameProcessed then return end
-    
-    if key.KeyCode == Enum.KeyCode.Insert then
-        if hasGamepass then
-            if gui and gui.Parent then
-                if gui.MainFrame.Visible then
-                    gui.MainFrame.Visible = false
-                else
-                    gui.MainFrame.Visible = true
-                end
-            else
-                createGUI()
-            end
-        else
-            -- Se não tem gamepass, mostrar GUI de compra
-            createPurchaseGUI()
-        end
+mainFrame.InputChanged:Connect(function(input)
+    if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) and dragging then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
 end)
 
--- Função para re-verificar gamepass (caso compre durante o jogo)
-local function recheckGamepass()
-    if checkGamepass() and not hasGamepass then
-        hasGamepass = true
-        
-        -- Fechar GUI de compra se estiver aberta
-        local purchaseGui = playerGui:FindFirstChild("GamepassPurchase")
-        if purchaseGui then
-            purchaseGui:Destroy()
-        end
-        
-        -- Abrir GUI principal
-        createGUI()
-        createNotification("🎉 Gamepass detectada! Bem-vindo ao VIP!", Color3.fromRGB(50, 200, 100))
-    end
-end
-
--- Verificar gamepass a cada 30 segundos
-spawn(function()
-    while true do
-        wait(30)
-        recheckGamepass()
-    end
-end)
+-- FIM DO SCRIPT INTEGRADO
